@@ -1,0 +1,184 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robô Achados | Mercado Livre</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f5f8;
+      color: #222;
+    }
+    header {
+      background: #ffe600;
+      text-align: center;
+      padding: 24px 14px;
+    }
+    header h1 { margin: 0 0 8px; }
+    main { max-width: 1100px; margin: auto; padding: 18px 12px; }
+    form { display: flex; gap: 8px; }
+    input {
+      flex: 1;
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid #ccc;
+      border-radius: 7px;
+      font-size: 16px;
+    }
+    button, .link {
+      border: 0;
+      border-radius: 7px;
+      padding: 12px;
+      background: #3483fa;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+    }
+    #status { margin: 18px 0; line-height: 1.5; color: #555; }
+    #produtos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 12px;
+    }
+    .produto {
+      background: white;
+      border: 1px solid #e1e1e1;
+      border-radius: 9px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow-wrap: anywhere;
+    }
+    .produto img {
+      width: 100%;
+      height: 145px;
+      object-fit: contain;
+    }
+    .produto h2 { font-size: 14px; line-height: 1.4; font-weight: normal; }
+    .preco { color: #00834b; font-size: 20px; font-weight: bold; }
+    .detalhes { color: #666; font-size: 12px; line-height: 1.6; margin: 10px 0; }
+    .link { margin-top: auto; display: block; }
+    footer { text-align: center; padding: 22px 12px; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛍️ Robô Achados</h1>
+    <p>Pesquise produtos do Mercado Livre</p>
+  </header>
+
+  <main>
+    <form id="form">
+      <input id="termo" type="search" placeholder="Ex.: celular Samsung" required>
+      <button id="buscar" type="submit">Buscar</button>
+    </form>
+
+    <div id="status" role="status">Carregando produtos populares...</div>
+    <section id="produtos"></section>
+  </main>
+
+  <footer>
+    Preços e informações fornecidos pelos anúncios consultados.
+    Este site não é afiliado ao Mercado Livre.
+  </footer>
+
+  <script>
+    const form = document.getElementById("form");
+    const termo = document.getElementById("termo");
+    const botao = document.getElementById("buscar");
+    const statusEl = document.getElementById("status");
+    const lista = document.getElementById("produtos");
+
+    function elemento(tag, texto, classe) {
+      const el = document.createElement(tag);
+      if (texto !== undefined) el.textContent = texto;
+      if (classe) el.className = classe;
+      return el;
+    }
+
+    function moeda(valor, moedaId) {
+      return Number(valor || 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: moedaId || "BRL"
+      });
+    }
+
+    async function buscar(pesquisa) {
+      botao.disabled = true;
+      lista.replaceChildren();
+      statusEl.textContent = "Buscando produtos...";
+
+      try {
+        const url = "/api/buscar?q=" + encodeURIComponent(pesquisa);
+        const resposta = await fetch(url);
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+          throw new Error(dados.erro || "Erro ao consultar os produtos.");
+        }
+
+        if (!dados.produtos || dados.produtos.length === 0) {
+          statusEl.textContent = "Nenhum produto encontrado.";
+          return;
+        }
+
+        statusEl.textContent =
+          dados.produtos.length + " produtos exibidos. Total informado pela API: " +
+          dados.total + ".";
+
+        dados.produtos.forEach(p => {
+          const card = elemento("article", undefined, "produto");
+          const img = document.createElement("img");
+          img.src = p.thumbnail || "";
+          img.alt = p.title || "Produto";
+          img.loading = "lazy";
+
+          const titulo = elemento("h2", p.title || "Produto");
+          const preco = elemento("div", moeda(p.price, p.currency_id), "preco");
+
+          const condicao = p.condition === "new" ? "Novo" :
+            p.condition === "used" ? "Usado" : "Não informada";
+
+          const detalhes = elemento(
+            "div",
+            "Condição: " + condicao +
+            (Number.isFinite(p.sold_quantity)
+              ? "\nVendas informadas: " + p.sold_quantity
+              : ""),
+            "detalhes"
+          );
+          detalhes.style.whiteSpace = "pre-line";
+
+          const link = document.createElement("a");
+          link.className = "link";
+          link.href = p.permalink;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Ver anúncio";
+
+          card.append(img, titulo, preco, detalhes, link);
+          lista.appendChild(card);
+        });
+      } catch (erro) {
+        statusEl.textContent = erro.message +
+          " Confira se o servidor terminou o deploy no Render.";
+      } finally {
+        botao.disabled = false;
+      }
+    }
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      if (termo.value.trim()) buscar(termo.value.trim());
+    });
+
+    buscar("mais vendidos");
+  </script>
+</body>
+</html>
